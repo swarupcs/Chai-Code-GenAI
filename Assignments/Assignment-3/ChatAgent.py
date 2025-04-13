@@ -11,36 +11,47 @@ client = OpenAI()
 # Create a base project folder using current date and time
 project_folder = f"Project_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 os.makedirs(project_folder, exist_ok=True)
+os.chdir(project_folder)  # Change working directory to the created project folder
 
 def run_command(command):
-    result = os.system(command)
-    return f"Executed: {command} with exit code {result}"
+    # Smart mkdir handling
+    if command.startswith("mkdir "):
+        parts = command.split()
+        # Extract folder name (skip 'mkdir' and ignore '-p' if misused)
+        folder_names = [p for p in parts[1:] if not p.startswith("-")]
+        for folder in folder_names:
+            os.makedirs(folder, exist_ok=True)
+        return f"Executed: mkdir {' '.join(folder_names)} with os.makedirs (safe)"
+    else:
+        result = os.system(command)
+        return f"Executed: {command} with exit code {result}"
+
 
 def write_file(data):
-    path = os.path.join(project_folder, data.get("path"))
+    path = data.get("path")
     content = data.get("content")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dir_name = os.path.dirname(path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
     with open(path, "w") as f:
         f.write(content)
-    return f"Wrote to file {path}"
+    return f"Wrote to file {os.path.abspath(path)}"
+
 
 def read_file(path):
-    full_path = os.path.join(project_folder, path)
-    if os.path.exists(full_path):
-        with open(full_path, "r") as f:
+    if os.path.exists(path):
+        with open(path, "r") as f:
             return f.read()
-    return f"File {full_path} does not exist."
+    return f"File {os.path.abspath(path)} does not exist."
 
 def list_files(path):
-    full_path = os.path.join(project_folder, path)
-    if os.path.exists(full_path):
+    if os.path.exists(path):
         file_list = []
-        for root, dirs, files in os.walk(full_path):
+        for root, dirs, files in os.walk(path):
             for file in files:
-                full_path = os.path.join(root, file)
-                file_list.append(full_path)
+                file_list.append(os.path.join(root, file))
         return file_list
-    return f"Path {full_path} does not exist."
+    return f"Path {os.path.abspath(path)} does not exist."
 
 available_tools = {
     "run_command": {
@@ -121,7 +132,7 @@ while True:
 
     while True:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=messages
         )
